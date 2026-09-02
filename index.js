@@ -1,13 +1,14 @@
 // === Constants ===
 const BASE = "https://fsa-crud-2aa9294fe819.herokuapp.com/api";
-const COHORT = ""; // Make sure to change this!
+const COHORT = "/2607"; // Make sure to change this!
+const RESOURCE = "/events";
 const API = BASE + COHORT;
 
 // === State ===
 let parties = [];
 let selectedParty;
 let rsvps = [];
-let guests = [];
+let guests = [];   
 
 /** Updates state with all parties from the API */
 async function getParties() {
@@ -57,6 +58,70 @@ async function getGuests() {
   }
 }
 
+/** Updates state with new guests from the API */
+async function addGuest(guest) {
+  try {
+    const response = await fetch(API + "/guests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(guest),
+    });
+    const result = await response.json();
+    guests.push(result.data);
+    render();
+  } catch (e) {
+    console.error(e);
+  }
+}
+async function addParty(party) {
+  try {
+    const response = await fetch(API + "/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(party),
+    });
+    const result = await response.json();
+     if (!response.ok) {
+      console.error("Add party failed:", result);
+      return;
+  }
+    parties.push(result.data);
+    render();
+  } catch (e) {
+    console.error(e);
+  }
+}
+/**Deletes the guest with the given ID via the API
+ * @param {string | number} id
+ */
+async function removeGuest(id) {
+  try {
+    await fetch(API + "/guests/" + id, {
+      method: "DELETE"
+    });
+    await getGuests();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function removeParty(id) {
+  try {
+    const response = await fetch(API + "/events/" + id, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      const errorBody = await response.json();
+      console.error("Delete failed:", errorBody);
+      return;
+    }
+    selectedParty = null;
+    await getParties();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 // === Components ===
 
 /** Party name that shows more details about the party when clicked */
@@ -101,13 +166,51 @@ function SelectedParty() {
     </time>
     <address>${selectedParty.location}</address>
     <p>${selectedParty.description}</p>
+    <button id="delete-party">Delete Party</button>
     <GuestList></GuestList>
   `;
   $party.querySelector("GuestList").replaceWith(GuestList());
-
+  
+  const $deleteButton = $party.querySelector("#delete-party");
+  $deleteButton.addEventListener("click", () => removeParty(selectedParty.id));
+  
   return $party;
 }
+function PartyForm() {
+  const $form = document.createElement("form");
+  $form.innerHTML = `
+    <label>
+      Name
+      <input name="name" type="text" required />
+    </label>
+    <label>
+      Description
+      <input name="description" type="text" required />
+    </label>
+    <label>
+      Date
+      <input name="date" type="date" required />
+    </label>
+    <label>
+      Location
+      <input name="location" type="text" required />
+    </label>
+    <button type="submit">Add Party</button>
+  `;
 
+  $form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const formData = new FormData($form);
+    addParty({
+      name: formData.get("name"),
+      description: formData.get("description"),
+      date: new Date(formData.get("date")).toISOString(),
+      location: formData.get("location"),
+    });
+    $form.reset();
+  });
+  return $form;
+}
 /** List of guests attending the selected party */
 function GuestList() {
   const $ul = document.createElement("ul");
@@ -118,15 +221,26 @@ function GuestList() {
   );
 
   // Simple components can also be created anonymously:
-  const $guests = guestsAtParty.map((guest) => {
-    const $guest = document.createElement("li");
-    $guest.textContent = guest.name;
-    return $guest;
-  });
+  const $guests = guestsAtParty.map(GuestListItem);
   $ul.replaceChildren(...$guests);
 
   return $ul;
 }
+
+
+
+function GuestListItem(guest) {
+  const $li = document.createElement("li");
+  $li.textContent = guest.name;
+
+  const $removeButton = document.createElement("button");
+  $removeButton.textContent = "Remove";
+  $removeButton.addEventListener("click", () => removeGuest(guest.id));
+  $li.append($removeButton);
+
+  return $li;
+}
+
 
 // === Render ===
 function render() {
@@ -137,6 +251,8 @@ function render() {
       <section>
         <h2>Upcoming Parties</h2>
         <PartyList></PartyList>
+        <h2>Add a Party</h2>
+        <PartyForm></PartyForm>
       </section>
       <section id="selected">
         <h2>Party Details</h2>
@@ -146,6 +262,7 @@ function render() {
   `;
 
   $app.querySelector("PartyList").replaceWith(PartyList());
+  $app.querySelector("PartyForm").replaceWith(PartyForm());
   $app.querySelector("SelectedParty").replaceWith(SelectedParty());
 }
 
